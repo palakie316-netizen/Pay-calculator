@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Pay Planner</title>
+<link rel="manifest" href="manifest.json"/>
+<meta name="theme-color" content="#0f172a"/>
+<style>
+:root{--bg:#0b1020;--card:#121a33;--card2:#0b122a;--text:#e5e7eb;--muted:#94a3b8;--line:#243055;--brand:#2563eb;--brand2:#334155;}
+*{box-sizing:border-box} body{margin:0;font-family:system-ui;background:var(--bg);color:var(--text);overflow-x:hidden}
+.wrap{max-width:980px;margin:0 auto;padding:12px}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px}
+h1{font-size:18px;margin:0}
+.pill{font-size:12px;color:#c7d2fe;border:1px solid var(--line);padding:6px 10px;border-radius:999px;background:rgba(37,99,235,.08)}
+.grid{display:grid;grid-template-columns:1.2fr .8fr;gap:12px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px}
+.card h2{margin:0 0 10px;font-size:14px;color:#c7d2fe}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.field{flex:1;min-width:170px}
+label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+input{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--card2);color:var(--text);font-size:15px}
+button{border:0;border-radius:10px;padding:10px 12px;font-weight:800;color:white;background:var(--brand);cursor:pointer}
+button.secondary{background:var(--brand2)} button.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:420px){.stats{grid-template-columns:1fr}}
+.stat{border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--card2)}
+.k{font-size:12px;color:var(--muted);margin-bottom:4px}
+.v{font-size:18px;font-weight:900}
+.small{font-size:12px;color:var(--muted);white-space:pre-line;line-height:1.35}
+.calendarHeader{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.monthTitle{font-size:16px;font-weight:900}
+.calGrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;width:100%}
+.dow{font-size:11px;color:var(--muted);text-align:center;padding:4px 0}
+.day{border:1px solid var(--line);background:var(--card2);border-radius:12px;padding:6px;min-height:66px;cursor:pointer}
+.day.muted{opacity:.45}
+.dayNum{font-weight:900;font-size:13px}
+.hours{margin-top:6px;font-size:11px;color:#e2e8f0}
+.money{font-size:11px;color:#c7d2fe;margin-top:2px}
+.footer{margin-top:12px;font-size:12px;color:var(--muted)}
+.modalBack{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;padding:16px}
+.modal{width:min(360px,100%);background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+.modal h3{margin:0 0 10px;font-size:15px;text-align:center}
+.miniRow{display:flex;gap:10px;margin-top:10px}
+.miniRow button{flex:1}
+.hint{font-size:11px;color:#c7d2fe;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Pay Planner</h1>
+    <div class="pill">Sun–Sat week • OT after 40 • numeric keypad • .25 hours</div>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Schedule (tap a date)</h2>
+      <div class="calendarHeader">
+        <div class="row" style="align-items:center;gap:8px;">
+          <button id="prevMonth" class="ghost" type="button">◀</button>
+          <div class="monthTitle" id="monthTitle"></div>
+          <button id="nextMonth" class="ghost" type="button">▶</button>
+        </div>
+        <div class="row" style="gap:8px;">
+          <button id="todayBtn" class="secondary" type="button">Today</button>
+          <button id="clearYearBtn" class="secondary" type="button">Clear Year</button>
+        </div>
+      </div>
+      <div class="calGrid" id="dowRow"></div>
+      <div class="calGrid" id="cal"></div>
+      <div class="footer">Weekly totals always cover the full Sunday–Saturday window (not “Sun→today”).</div>
+    </div>
+
+    <div class="card">
+      <h2>Pay settings</h2>
+      <div class="row">
+        <div class="field">
+          <label>Hourly rate ($)</label>
+          <input id="hourlyRate" inputmode="decimal" placeholder="50"/>
+        </div>
+        <div class="field">
+          <label>OT multiplier</label>
+          <input id="otMult" inputmode="decimal" placeholder="1.5"/>
+          <div class="hint">Pay = rate×all hours + (mult−1)×rate×OT hours</div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <div class="field">
+          <label>Weekly OT threshold</label>
+          <input id="otThreshold" inputmode="decimal" placeholder="40"/>
+        </div>
+        <div class="field">
+          <label>Pay period start (Sunday)</label>
+          <input id="payPeriodStart" type="date"/>
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <div class="field">
+          <label>VA disability (monthly $)</label>
+          <input id="vaMonthly" inputmode="decimal" placeholder="0"/>
+        </div>
+        <div class="field">
+          <label>Military pension (monthly $)</label>
+          <input id="pensionMonthly" inputmode="decimal" placeholder="0"/>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="recalcBtn" type="button">Recalculate</button>
+        <button id="exportBtn" class="secondary" type="button">Export CSV</button>
+      </div>
+
+      <div style="height:10px"></div>
+      <h2>Projection</h2>
+      <div class="stats">
+        <div class="stat">
+          <div class="k" id="wkLabel">This week</div>
+          <div class="v" id="wkTotal">$0</div>
+          <div class="small" id="wkDetail"></div>
+        </div>
+        <div class="stat">
+          <div class="k" id="ppLabel">Pay period</div>
+          <div class="v" id="ppTotal">$0</div>
+          <div class="small" id="ppDetail"></div>
+        </div>
+        <div class="stat">
+          <div class="k">This month (work + fixed)</div>
+          <div class="v" id="moTotal">$0</div>
+          <div class="small" id="moDetail"></div>
+        </div>
+        <div class="stat">
+          <div class="k">This year (work + fixed)</div>
+          <div class="v" id="yrTotal">$0</div>
+          <div class="small" id="yrDetail"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modalBack" id="modalBack">
+  <div class="modal">
+    <h3 id="modalTitle">Hours</h3>
+    <label>Hours worked</label>
+    <input id="hoursInput" type="number" inputmode="decimal" step="0.25" min="0" placeholder="12 or 12.5"/>
+    <div class="miniRow">
+      <button id="btn12" type="button">12 hours</button>
+      <button id="btnClear" class="secondary" type="button">Clear</button>
+    </div>
+    <div class="miniRow">
+      <button id="cancelBtn" class="ghost" type="button">Cancel</button>
+      <button id="saveBtn" type="button">Save</button>
+    </div>
+    <div class="hint">Quarter hours supported (0.25, 0.5, 0.75).</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const money = (n) => (isFinite(n) ? n : 0).toLocaleString(undefined,{style:"currency",currency:"USD",maximumFractionDigits:2});
+  const clamp0 = (n) => Math.max(0, isFinite(n) ? n : 0);
+  const parseNum = (v) => {
+    if (v===null || v===undefined) return 0;
+    const s=(""+v).replace(",",".").trim();
+    const n=Number(s);
+    return isFinite(n) ? n : 0;
+  };
+  const pad2 = (n)=>String(n).padStart(2,"0");
+  const ymd = (d)=>`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  const fromYmd = (s)=>{
+    const [Y,M,D]=(s||"").split("-").map(Number);
+    if(!Y||!M||!D) return null;
+    const d=new Date(Y,M-1,D); d.setHours(0,0,0,0); return d;
+  };
+  const startOfWeekSunday = (d)=>{
+    const x=new Date(d); x.setHours(0,0,0,0);
+    x.setDate(x.getDate()-x.getDay()); return x;
+  };
+  const addDays = (d,n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); x.setHours(0,0,0,0); return x; };
+  const monthName=(m)=>["January","February","March","April","May","June","July","August","September","October","November","December"][m];
+  const fmtDate = (d)=>d.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
+  const sameDay=(a,b)=>a&&b&&a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
+
+  const STATE_KEY="pay_planner_v6";
+  const now=new Date(); now.setHours(0,0,0,0);
+
+  const state={
+    viewYear: now.getFullYear(),
+    viewMonth: now.getMonth(),
+    hourlyRate: 50,
+    otMult: 1.5,
+    otThreshold: 40,
+    payPeriodStart: ymd(startOfWeekSunday(now)),
+    vaMonthly: 0,
+    pensionMonthly: 0,
+    work: {}
+  };
+
+  function load(){
+    try{
+      const raw=localStorage.getItem(STATE_KEY);
+      if(!raw) return;
+      const obj=JSON.parse(raw);
+      if(!obj) return;
+      Object.assign(state,obj);
+      if(!state.work) state.work={};
+    }catch(e){}
+  }
+  function save(){ localStorage.setItem(STATE_KEY, JSON.stringify(state)); }
+
+  const $=(id)=>document.getElementById(id);
+
+  function renderDow(){
+    const dowRow=$("dowRow");
+    dowRow.innerHTML="";
+    ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].forEach(d=>{
+      const el=document.createElement("div");
+      el.className="dow";
+      el.textContent=d;
+      dowRow.appendChild(el);
+    });
+  }
+
+  function hoursForDay(d){
+    return clamp0(parseNum(state.work[ymd(d)] || 0));
+  }
+
+  function weekAlloc(weekStart){
+    const thr = clamp0(parseNum(state.otThreshold)) || 40;
+    let remainingReg = thr;
+    const out=[];
+    for(let i=0;i<7;i++){
+      const d=addDays(weekStart,i);
+      const h=hoursForDay(d);
+      const reg=Math.min(h, Math.max(0,remainingReg));
+      const ot=Math.max(0, h-reg);
+      remainingReg -= reg;
+      out.push({date:d,hours:h,reg,ot});
+    }
+    return out;
+  }
+
+  function weekTotals(weekStart){
+    const rate=clamp0(parseNum(state.hourlyRate));
+    const mult=clamp0(parseNum(state.otMult)) || 1.0;
+    const premFactor=Math.max(0, mult-1);
+    const alloc=weekAlloc(weekStart);
+    const totalHours=alloc.reduce((a,x)=>a+x.hours,0);
+    const otHours=alloc.reduce((a,x)=>a+x.ot,0);
+    const basePay=totalHours*rate;
+    const otPremium=otHours*rate*premFactor;
+    return {alloc,totalHours,otHours,basePay,otPremium,totalPay:basePay+otPremium};
+  }
+
+  function payPeriodBounds(anyDate){
+    const anchor=fromYmd(state.payPeriodStart) || startOfWeekSunday(now);
+    const dayMs=86400000;
+    const diffDays=Math.floor((anyDate-anchor)/dayMs);
+    const idx=Math.floor(diffDays/14);
+    const start=addDays(anchor, idx*14);
+    const end=addDays(start, 13);
+    return {start,end};
+  }
+
+  function renderCalendar(){
+    $("monthTitle").textContent = `${monthName(state.viewMonth)} ${state.viewYear}`;
+    const cal=$("cal");
+    const first=new Date(state.viewYear,state.viewMonth,1); first.setHours(0,0,0,0);
+    const startCell=addDays(first, -first.getDay());
+    cal.innerHTML="";
+
+    const dayInfo={};
+    const visStart=startOfWeekSunday(startCell);
+    const visEnd=addDays(visStart,41);
+
+    for(let w=new Date(visStart); w<=visEnd; w=addDays(w,7)){
+      const wk=weekTotals(w);
+      const rate=clamp0(parseNum(state.hourlyRate));
+      const mult=clamp0(parseNum(state.otMult)) || 1.0;
+      const premFactor=Math.max(0, mult-1);
+      for(const a of wk.alloc){
+        const key=ymd(a.date);
+        const pay = a.hours*rate + a.ot*rate*premFactor;
+        dayInfo[key]={hours:a.hours, pay};
+      }
+    }
+
+    for(let i=0;i<42;i++){
+      const d=addDays(startCell,i);
+      const key=ymd(d);
+      const inMonth=d.getMonth()===state.viewMonth;
+      const info=dayInfo[key]||{hours:0,pay:0};
+      const cell=document.createElement("div");
+      cell.className="day"+(inMonth?"":" muted");
+      cell.innerHTML = `
+        <div class="dayNum">${d.getDate()}</div>
+        <div class="hours">${info.hours>0 ? info.hours.toFixed(2).replace(/\.00$/,"")+"h" : ""}</div>
+        <div class="money">${info.hours>0 ? money(info.pay) : ""}</div>
+      `;
+      if(sameDay(d,now)) cell.style.outline="2px solid rgba(37,99,235,.7)";
+      cell.addEventListener("click", ()=>openModal(d));
+      cal.appendChild(cell);
+    }
+  }
+
+  // Modal
+  let modalDate=null;
+  function openModal(d){
+    modalDate=new Date(d); modalDate.setHours(0,0,0,0);
+    const key=ymd(modalDate);
+    $("modalTitle").textContent = `Hours for ${key}`;
+    const v=state.work[key];
+    $("hoursInput").value = (v===undefined || v===0) ? "" : v;
+    $("modalBack").style.display="flex";
+    $("hoursInput").focus();
+  }
+  function closeModal(){ $("modalBack").style.display="none"; modalDate=null; }
+
+  function rangeTotals(startDate,endDate){
+    const s=startOfWeekSunday(startDate);
+    const rate=clamp0(parseNum(state.hourlyRate));
+    const mult=clamp0(parseNum(state.otMult)) || 1.0;
+    const premFactor=Math.max(0, mult-1);
+
+    let hours=0, ot=0, base=0, prem=0;
+    for(let w=new Date(s); w<=endDate; w=addDays(w,7)){
+      const wk=weekTotals(w);
+      for(const a of wk.alloc){
+        if(a.date<startDate || a.date>endDate) continue;
+        hours += a.hours;
+        ot += a.ot;
+        base += a.hours*rate;
+        prem += a.ot*rate*premFactor;
+      }
+    }
+    return {hours, ot, base, prem, total: base+prem};
+  }
+
+  function renderProjection(){
+    const wkStart=startOfWeekSunday(now);
+    const wkEnd=addDays(wkStart,6);
+    $("wkLabel").textContent = `This week (${fmtDate(wkStart)} – ${fmtDate(wkEnd)})`;
+
+    const wk=weekTotals(wkStart);
+    $("wkTotal").textContent = money(wk.totalPay);
+    $("wkDetail").textContent =
+      `Hours: ${wk.totalHours.toFixed(2).replace(/\.00$/,"")}`+
+      `\nOT hours: ${wk.otHours.toFixed(2).replace(/\.00$/,"")}`+
+      `\nBase: ${money(wk.basePay)}`+
+      `\nOT premium: ${money(wk.otPremium)}`;
+
+    const pp=payPeriodBounds(now);
+    $("ppLabel").textContent = `Pay period (${fmtDate(pp.start)} – ${fmtDate(pp.end)})`;
+    const w1=weekTotals(pp.start);
+    const w2=weekTotals(addDays(pp.start,7));
+    const ppBase=w1.basePay+w2.basePay;
+    const ppPrem=w1.otPremium+w2.otPremium;
+    $("ppTotal").textContent = money(ppBase+ppPrem);
+    $("ppDetail").textContent =
+      `Week 1 hours: ${w1.totalHours.toFixed(2).replace(/\.00$/,"")} (OT ${w1.otHours.toFixed(2).replace(/\.00$/,"")})`+
+      `\nWeek 2 hours: ${w2.totalHours.toFixed(2).replace(/\.00$/,"")} (OT ${w2.otHours.toFixed(2).replace(/\.00$/,"")})`+
+      `\nBase: ${money(ppBase)}`+
+      `\nOT premium: ${money(ppPrem)}`;
+
+    const moStart=new Date(now.getFullYear(),now.getMonth(),1); moStart.setHours(0,0,0,0);
+    const moEnd=new Date(now.getFullYear(),now.getMonth()+1,0); moEnd.setHours(0,0,0,0);
+    const moWork=rangeTotals(moStart,moEnd).total;
+    const moFixed=clamp0(parseNum(state.vaMonthly))+clamp0(parseNum(state.pensionMonthly));
+    $("moTotal").textContent = money(moWork+moFixed);
+    $("moDetail").textContent = `${money(moWork)} work + ${money(moFixed)} fixed`;
+
+    const yrStart=new Date(now.getFullYear(),0,1); yrStart.setHours(0,0,0,0);
+    const yrEnd=new Date(now.getFullYear(),11,31); yrEnd.setHours(0,0,0,0);
+    const yrWork=rangeTotals(yrStart,yrEnd).total;
+    const yrFixed=moFixed*12;
+    $("yrTotal").textContent = money(yrWork+yrFixed);
+    $("yrDetail").textContent = `${money(yrWork)} work + ${money(yrFixed)} fixed`;
+  }
+
+  function exportCsv(){
+    const year=state.viewYear;
+    const rows=["date,hours"];
+    Object.keys(state.work).sort().forEach(k=>{
+      if(!k.startsWith(year+"-")) return;
+      const h=clamp0(parseNum(state.work[k]));
+      if(h<=0) return;
+      rows.push(`${k},${h}`);
+    });
+    const csv=rows.join("\n");
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download=`pay_planner_${year}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+
+  function recalcAndRender(){ renderCalendar(); renderProjection(); }
+
+  function bind(){
+    const bindNum=(id, prop, fallback)=>{
+      const el=$(id);
+      el.value = (state[prop] ?? fallback) ? state[prop] : "";
+      el.addEventListener("input", ()=>{ state[prop]=parseNum(el.value); save(); });
+    };
+    bindNum("hourlyRate","hourlyRate",50);
+    bindNum("otMult","otMult",1.5);
+    bindNum("otThreshold","otThreshold",40);
+    bindNum("vaMonthly","vaMonthly",0);
+    bindNum("pensionMonthly","pensionMonthly",0);
+
+    const pp=$("payPeriodStart");
+    pp.value = state.payPeriodStart || ymd(startOfWeekSunday(now));
+    pp.addEventListener("change", ()=>{ state.payPeriodStart=pp.value; save(); recalcAndRender(); });
+
+    $("recalcBtn").addEventListener("click", recalcAndRender);
+    $("exportBtn").addEventListener("click", exportCsv);
+
+    $("prevMonth").addEventListener("click", ()=>{
+      const d=new Date(state.viewYear,state.viewMonth,1);
+      d.setMonth(d.getMonth()-1);
+      state.viewYear=d.getFullYear(); state.viewMonth=d.getMonth();
+      save(); recalcAndRender();
+    });
+    $("nextMonth").addEventListener("click", ()=>{
+      const d=new Date(state.viewYear,state.viewMonth,1);
+      d.setMonth(d.getMonth()+1);
+      state.viewYear=d.getFullYear(); state.viewMonth=d.getMonth();
+      save(); recalcAndRender();
+    });
+    $("todayBtn").addEventListener("click", ()=>{
+      state.viewYear=now.getFullYear(); state.viewMonth=now.getMonth();
+      save(); recalcAndRender();
+    });
+    $("clearYearBtn").addEventListener("click", ()=>{
+      const year=state.viewYear;
+      Object.keys(state.work).forEach(k=>{ if(k.startsWith(year+"-")) delete state.work[k]; });
+      save(); recalcAndRender();
+    });
+
+    $("cancelBtn").addEventListener("click", closeModal);
+    $("modalBack").addEventListener("click", (e)=>{ if(e.target.id==="modalBack") closeModal(); });
+
+    $("btn12").addEventListener("click", ()=>{ $("hoursInput").value="12"; $("hoursInput").focus(); });
+    $("btnClear").addEventListener("click", ()=>{ $("hoursInput").value=""; $("hoursInput").focus(); });
+
+    $("saveBtn").addEventListener("click", ()=>{
+      if(!modalDate) return;
+      const key=ymd(modalDate);
+      const h=clamp0(parseNum($("hoursInput").value));
+      if(h<=0) delete state.work[key]; else state.work[key]=h;
+      save(); closeModal(); recalcAndRender();
+    });
+  }
+
+  load();
+  renderDow();
+  bind();
+  recalcAndRender();
+
+  if("serviceWorker" in navigator){
+    window.addEventListener("load", ()=>{ navigator.serviceWorker.register("./sw.js").catch(()=>{}); });
+  }
+})();
+</script>
+</body>
+</html>
