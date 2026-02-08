@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Pay Planner</title>
+<link rel="manifest" href="manifest.json"/>
+<meta name="theme-color" content="#0f172a"/>
+
+<style>
+:root{
+ --bg:#0b1020;--card:#121a33;--card2:#0b122a;--text:#e5e7eb;
+ --muted:#94a3b8;--line:#243055;--brand:#2563eb;--brand2:#334155;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui;background:var(--bg);color:var(--text);overflow-x:hidden}
+.wrap{max-width:980px;margin:auto;padding:12px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+h1{font-size:18px;margin:0}
+.pill{font-size:12px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;color:#c7d2fe}
+
+.grid{display:grid;grid-template-columns:1.2fr .8fr;gap:12px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px}
+.card h2{font-size:14px;color:#c7d2fe;margin:0 0 10px}
+
+input,button{
+ width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);
+ background:var(--card2);color:var(--text);font-size:14px
+}
+
+button{background:var(--brand);border:0;font-weight:700;cursor:pointer}
+button.secondary{background:var(--brand2)}
+button.ghost{background:transparent;border:1px solid var(--line)}
+
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.field{flex:1;min-width:150px}
+
+.calGrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+.dow{text-align:center;font-size:11px;color:var(--muted)}
+
+.day{
+ background:var(--card2);border:1px solid var(--line);
+ border-radius:10px;padding:5px;min-height:60px;cursor:pointer
+}
+.day.muted{opacity:.4}
+.dayNum{font-size:12px;font-weight:800}
+.hours{font-size:10px;margin-top:4px}
+.money{font-size:10px;color:#c7d2fe}
+
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:420px){.stats{grid-template-columns:1fr}}
+
+.stat{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:8px}
+.k{font-size:11px;color:var(--muted)}
+.v{font-size:17px;font-weight:800}
+.small{font-size:11px;color:var(--muted);white-space:pre-line}
+
+.modalBack{
+ position:fixed;inset:0;background:rgba(0,0,0,.6);
+ display:none;align-items:center;justify-content:center
+}
+
+.modal{
+ background:var(--card);border:1px solid var(--line);
+ border-radius:14px;padding:14px;width:280px
+}
+
+.modal h3{margin:0 0 10px;font-size:15px;text-align:center}
+
+.modal .row{justify-content:center}
+
+.footer{font-size:11px;color:var(--muted);margin-top:10px}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+
+<header>
+<h1>Pay Planner</h1>
+<div class="pill">Simple Hours Entry</div>
+</header>
+
+<div class="grid">
+
+<div class="card">
+<h2>Schedule</h2>
+
+<div class="row" style="margin-bottom:8px">
+<button id="prevMonth" class="ghost">◀</button>
+<div id="monthTitle" style="font-weight:800"></div>
+<button id="nextMonth" class="ghost">▶</button>
+</div>
+
+<div class="calGrid" id="dowRow"></div>
+<div class="calGrid" id="cal"></div>
+
+</div>
+
+<div class="card">
+
+<h2>Settings</h2>
+
+<div class="row">
+<div class="field">
+<label>Hourly Rate</label>
+<input id="hourlyRate"/>
+</div>
+<div class="field">
+<label>OT Mult</label>
+<input id="otMult"/>
+</div>
+</div>
+
+<div class="row" style="margin-top:8px">
+<div class="field">
+<label>OT Threshold</label>
+<input id="otThreshold"/>
+</div>
+<div class="field">
+<label>Pay Period Start</label>
+<input id="payPeriodStart" type="date"/>
+</div>
+</div>
+
+<div class="row" style="margin-top:8px">
+<div class="field">
+<label>VA Monthly</label>
+<input id="vaMonthly"/>
+</div>
+<div class="field">
+<label>Pension Monthly</label>
+<input id="pensionMonthly"/>
+</div>
+</div>
+
+<div class="row" style="margin-top:10px">
+<button id="recalcBtn">Recalculate</button>
+</div>
+
+<h2 style="margin-top:14px">Projection</h2>
+
+<div class="stats">
+
+<div class="stat">
+<div class="k">This Week</div>
+<div class="v" id="wkTotal">$0</div>
+<div class="small" id="wkDetail"></div>
+</div>
+
+<div class="stat">
+<div class="k">Pay Period</div>
+<div class="v" id="ppTotal">$0</div>
+<div class="small" id="ppDetail"></div>
+</div>
+
+</div>
+
+<div class="footer">
+Base = all hours. OT = work hours only.
+</div>
+
+</div>
+</div>
+</div>
+
+<!-- MODAL -->
+<div class="modalBack" id="modalBack">
+<div class="modal">
+
+<h3>Enter Hours</h3>
+
+<div class="row">
+<input id="hoursInput" placeholder="Total hours"/>
+</div>
+
+<div class="row" style="margin-top:8px">
+<button id="btn12">12 Hours</button>
+</div>
+
+<div class="row" style="margin-top:8px">
+<button id="saveBtn">Save</button>
+<button id="cancelBtn" class="secondary">Cancel</button>
+</div>
+
+</div>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+
+const money=n=>(isFinite(n)?n:0).toLocaleString(undefined,{style:"currency",currency:"USD"});
+
+const parse=v=>{const n=Number(v);return isFinite(n)?n:0};
+
+const pad=n=>String(n).padStart(2,"0");
+const ymd=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+
+const add=(d,n)=>{let x=new Date(d);x.setDate(x.getDate()+n);return x};
+
+const sow=d=>{let x=new Date(d);x.setDate(x.getDate()-x.getDay());return x};
+
+const stateKey="pay_v5";
+
+let state={
+ year:new Date().getFullYear(),
+ month:new Date().getMonth(),
+ rate:50,
+ mult:1.5,
+ thr:40,
+ start:"",
+ va:0,
+ pen:0,
+ work:{}
+};
+
+function load(){
+ let r=localStorage.getItem(stateKey);
+ if(r) Object.assign(state,JSON.parse(r));
+}
+
+function save(){localStorage.setItem(stateKey,JSON.stringify(state))}
+
+let now=new Date();
+
+function renderDow(){
+ let d=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+ $("dowRow").innerHTML=d.map(x=>"<div class='dow'>"+x+"</div>").join("");
+}
+
+function weekPay(w){
+ let rate=parse(state.rate);
+ let mult=parse(state.mult);
+ let thr=parse(state.thr);
+
+ let rem=thr;
+
+ let work=0,ot=0,base=0,prem=0;
+
+ for(let i=0;i<7;i++){
+  let d=add(w,i);
+  let h=parse(state.work[ymd(d)]||0);
+
+  let r=Math.min(h,Math.max(0,rem));
+  let o=Math.max(0,h-r);
+  rem-=r;
+
+  work+=h;
+  ot+=o;
+
+  base+=h*rate;
+  prem+=o*rate*(mult-1);
+ }
+
+ return{work,ot,base,prem,total:base+prem};
+}
+
+function payPeriod(d){
+ let a=new Date(state.start||sow(now));
+ let diff=Math.floor((d-a)/86400000);
+ let i=Math.floor(diff/14);
+ let s=add(a,i*14);
+ return{s,e:add(s,13)};
+}
+
+function renderCal(){
+
+ let title=new Date(state.year,state.month,1)
+ .toLocaleString(undefined,{month:"long",year:"numeric"});
+
+ $("monthTitle").textContent=title;
+
+ let first=new Date(state.year,state.month,1);
+ let start=add(first,-first.getDay());
+
+ let cal="";
+
+ for(let i=0;i<42;i++){
+  let d=add(start,i);
+  let key=ymd(d);
+  let h=parse(state.work[key]||0);
+
+  let cls="day";
+  if(d.getMonth()!=state.month) cls+=" muted";
+
+  cal+=`
+  <div class="${cls}" data-d="${key}">
+   <div class="dayNum">${d.getDate()}</div>
+   <div class="hours">${h? h+"h":""}</div>
+   <div class="money">${h?money(h*state.rate):""}</div>
+  </div>`;
+ }
+
+ $("cal").innerHTML=cal;
+
+ document.querySelectorAll(".day").forEach(e=>{
+  e.onclick=()=>openModal(e.dataset.d);
+ });
+}
+
+let curDate="";
+
+function openModal(d){
+ curDate=d;
+ $("hoursInput").value=state.work[d]||"";
+ $("modalBack").style.display="flex";
+ $("hoursInput").focus();
+}
+
+function closeModal(){
+ $("modalBack").style.display="none";
+ curDate="";
+}
+
+function recalc(){
+
+ let w=sow(now);
+ let wk=weekPay(w);
+
+ $("wkTotal").textContent=money(wk.total);
+ $("wkDetail").textContent=
+ "Work: "+wk.work+"h\nOT: "+wk.ot+"h\nBase: "+money(wk.base)+"\nOT Prem: "+money(wk.prem);
+
+ let pp=payPeriod(now);
+ let t={work:0,ot:0,base:0,prem:0};
+
+ for(let d=new Date(pp.s);d<=pp.e;d=add(d,7)){
+  let x=weekPay(d);
+  t.work+=x.work;
+  t.ot+=x.ot;
+  t.base+=x.base;
+  t.prem+=x.prem;
+ }
+
+ $("ppTotal").textContent=money(t.base+t.prem);
+ $("ppDetail").textContent=
+ "Work: "+t.work+"h\nOT: "+t.ot+"h\nBase: "+money(t.base)+"\nOT Prem: "+money(t.prem);
+}
+
+function bind(){
+
+ ["hourlyRate","otMult","otThreshold","vaMonthly","pensionMonthly"]
+ .forEach((id,i)=>{
+  let k=["rate","mult","thr","va","pen"][i];
+  $(id).value=state[k];
+  $(id).oninput=e=>{state[k]=parse(e.target.value);save()};
+ });
+
+ $("payPeriodStart").value=state.start;
+ $("payPeriodStart").onchange=e=>{state.start=e.target.value;save()};
+
+ $("prevMonth").onclick=()=>{
+  let d=new Date(state.year,state.month-1,1);
+  state.year=d.getFullYear();state.month=d.getMonth();
+  save();renderAll();
+ };
+
+ $("nextMonth").onclick=()=>{
+  let d=new Date(state.year,state.month+1,1);
+  state.year=d.getFullYear();state.month=d.getMonth();
+  state.month=d.getMonth();
+  save();renderAll();
+ };
+
+ $("recalcBtn").onclick=renderAll;
+
+ $("cancelBtn").onclick=closeModal;
+
+ $("btn12").onclick=()=>{$("hoursInput").value="12"};
+
+ $("saveBtn").onclick=()=>{
+  let h=parse($("hoursInput").value);
+  if(h<=0) delete state.work[curDate];
+  else state.work[curDate]=h;
+  save();closeModal();renderAll();
+ };
+}
+
+function renderAll(){
+ renderCal();
+ recalc();
+}
+
+load();
+renderDow();
+bind();
+renderAll();
+
+})();
+</script>
+
+</body>
+</html>
